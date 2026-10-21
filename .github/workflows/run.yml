@@ -1,0 +1,56 @@
+name: run
+
+# Run a long metanorma sample/corpus job (mn-samples-*) on sandbox
+# runners, without transferring the repo: the workflow checks out any
+# metanorma/<repo> ref with the CI PAT and executes a command in it.
+#
+# Examples:
+#   repo: mn-samples-iso   command: bundle exec rake
+#   repo: mn-samples-jcgm  command: metanorma generate -c metanorma.yml
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Repository short name under metanorma/
+        required: true
+      ref:
+        description: Ref to run
+        default: main
+      command:
+        description: Command to run in the repo root
+        required: true
+      ruby_version:
+        default: '3.3'
+      bundle_install:
+        description: Run bundle install first
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ secrets.METANORMA_CI_PAT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: metanorma/${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.METANORMA_CI_PAT_TOKEN }}
+          submodules: recursive
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ inputs.ruby_version }}
+          bundler-cache: false
+      - name: Bundle
+        if: inputs.bundle_install
+        run: |
+          rm -f Gemfile.lock
+          bundle install --jobs 4 --retry 3
+      - name: Run
+        run: ${{ inputs.command }}
